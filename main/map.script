@@ -1,0 +1,97 @@
+MAP_SIZE = 100 -- Max = 100
+MIN_ROOM_SIZE = 10 -- Min = 1
+
+function init(self)
+	msg.post(".", "acquire_input_focus")
+	tilemap.set_visible("#map", "layer1", false)
+	centre_map()
+end
+
+function centre_map(self)
+	local width = MAP_SIZE * 16
+	local height = MAP_SIZE * 16
+	go.set_position(-vmath.vector3(width/2, height/2, 0), ".")
+end
+
+function on_input(self, action_id, action)
+	if action_id == hash("draw") and action.pressed then
+		generate_dungeon()
+	end
+end
+
+function generate_dungeon(self)
+	print("Generating dungeon...")
+	generate_leaves()
+	draw_leaves()
+	print("Dungeon generation complete!")
+end
+
+Leaf = require("main.leaf")
+LEAVES = {}
+
+function copy(original)
+	local copy = {}
+	for key, value in pairs(original) do
+		copy[key] = value
+	end
+	return copy
+end
+
+function generate_leaves(self)
+	math.randomseed(os.time())
+	LEAVES = {}
+	
+	local root = Leaf.new(0, 0, MAP_SIZE, MAP_SIZE)
+	LEAVES[1] = root
+	count = 1
+
+	print("Generating leaves...")
+	did_split = true
+	while did_split do
+		did_split = false
+		
+		local newLeaves = copy(LEAVES)
+		for l, leaf in pairs(LEAVES) do
+			if leaf:split(MIN_ROOM_SIZE) then
+				newLeaves[#newLeaves + 1] = leaf.leftChild
+				newLeaves[#newLeaves + 1] = leaf.rightChild
+				count = count + 1
+				did_split = true
+			end
+		end
+		LEAVES = newLeaves
+	end
+	print("Generated " .. count .. " leaves.")
+end
+
+function draw_leaves(self)
+	fill_map(0)
+	tilemap.set_visible("#map", "layer1", true)
+
+	print("Drawing leaves...")
+	count = 0
+	for i, leaf in pairs(LEAVES) do
+		local tile = 3
+		
+		for y=leaf.y,(leaf.y + leaf.height),1 do
+			tilemap.set_tile("#map", "layer1", leaf.x, y, tile)
+			tilemap.set_tile("#map", "layer1", (leaf.x + leaf.width), y, tile)
+		end
+		
+		for x=leaf.x,(leaf.x + leaf.width),1 do
+			tilemap.set_tile("#map", "layer1", x, leaf.y, tile)
+			tilemap.set_tile("#map", "layer1", x, (leaf.y + leaf.height), tile)
+		end
+		
+		count = count + 1
+	end
+	print("Finished drawing leaves with " .. count .. " rectangles.")
+end
+
+function fill_map(tile)
+	for y=0,MAP_SIZE,1 do
+		for x=0,MAP_SIZE,1 do
+			tilemap.set_tile("#map", "layer1", x, y, tile)
+		end
+	end
+end

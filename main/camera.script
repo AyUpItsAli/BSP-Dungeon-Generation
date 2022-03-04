@@ -1,0 +1,11 @@
+function centre_camera(self)
+	local width = tonumber(sys.get_config("display.width"))
+	local height = tonumber(sys.get_config("display.height"))
+	go.set_position(-vmath.vector3(width/2, height/2, 0), ".")
+end
+
+function init(self)
+	msg.post("#camera", "acquire_camera_focus")
+	msg.post("@render:", "use_fixed_projection", { zoom = 0.3 })
+	centre_camera()
+end
