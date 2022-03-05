@@ -1,19 +1,22 @@
-Leaf = {}
-Leaf.__index = Leaf
+LEAF = {}
+LEAF.__index = LEAF
 
-function Leaf.new(x, y, width, height)
+ROOM = require("main.room")
+
+function LEAF.new(x, y, width, height)
 	local newLeaf = {}
-	setmetatable(newLeaf, Leaf)
-	newLeaf.x = x -- x and y define the bottom left corner of the room
+	setmetatable(newLeaf, LEAF)
+	newLeaf.x = x -- x and y define the bottom left corner of the leaf
 	newLeaf.y = y
-	newLeaf.width = width
+	newLeaf.width = width -- width and height define space between outermost walls of the leaf
 	newLeaf.height = height
 	newLeaf.leftChild = nil
 	newLeaf.rightChild = nil
+	newLeaf.room = nil
 	return newLeaf
 end
 
-function Leaf:split(min_size)
+function LEAF:split(min_size)
 	if self.leftChild ~= nil or self.rightChild ~= nil then
 		return false
 	end
@@ -31,16 +34,34 @@ function Leaf:split(min_size)
 		return false
 	end
 	
-	local split = math.random(min_size, max)
+	local split = math.random(min_size+1, max)
 	if horizontal then
-		self.leftChild = Leaf.new(self.x, self.y, self.width, split)
-		self.rightChild = Leaf.new(self.x, self.y + split, self.width, self.height - split)
+		self.leftChild = LEAF.new(self.x, self.y, self.width, split - 1)
+		self.rightChild = LEAF.new(self.x, self.y + split, self.width, self.height - split)
 	else
-		self.leftChild = Leaf.new(self.x, self.y, split, self.height)
-		self.rightChild = Leaf.new(self.x + split, self.y, self.width - split, self.height)
+		self.leftChild = LEAF.new(self.x, self.y, split - 1, self.height)
+		self.rightChild = LEAF.new(self.x + split, self.y, self.width - split, self.height)
 	end
 	
 	return true
 end
 
-return Leaf
+function LEAF:create_room(min_size, spacing)
+	if self.leftChild ~= nil or self.rightChild ~= nil then
+		return false
+	end
+	
+	local min_width = math.min(min_size, self.width - (spacing*2))
+	local min_height = math.min(min_size, self.height - (spacing*2))
+
+	local width = math.random(min_width, self.width - (spacing*2))
+	local height = math.random(min_height, self.height - (spacing*2))
+
+	local x = math.random(self.x + 1 + spacing, (self.x + self.width + 1) - width - spacing)
+	local y = math.random(self.y + 1 + spacing, (self.y + self.height + 1) - height - spacing)
+
+	self.room = ROOM.new(x, y, width, height)
+	return true
+end
+
+return LEAF

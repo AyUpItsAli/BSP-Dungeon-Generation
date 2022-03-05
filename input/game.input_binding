@@ -1,6 +1,18 @@
 key_trigger {
+  input: KEY_ENTER
+  action: "gen_dungeon"
+}
+key_trigger {
+  input: KEY_L
+  action: "toggle_leaves"
+}
+key_trigger {
+  input: KEY_R
+  action: "toggle_rooms"
+}
+key_trigger {
   input: KEY_SPACE
-  action: "draw"
+  action: "gen_rooms"
 }
 mouse_trigger {
   input: MOUSE_BUTTON_1

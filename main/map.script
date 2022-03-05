@@ -1,97 +1,146 @@
-MAP_SIZE = 100 -- Max = 100
-MIN_ROOM_SIZE = 10 -- Min = 1
+MAP_SIZE = 100 -- (space between outermost walls) Min 1, Max = 100
+MIN_LEAF_SIZE = 10 -- Min = 1, Max = MAP_SIZE / 2 - 1
+MIN_ROOM_SIZE = 5 -- Min = 1, Max = MIN_LEAF_SIZE
+ROOM_SPACING = 1
+
+LEAVES = "leaves" -- tilemap layers
+ROOMS = "rooms"
+LEAVES_VISIBLE = true
+ROOMS_VISIBLE = true
+
+LEAF = require("main.leaf")
+ROOT = nil
 
 function init(self)
-	msg.post(".", "acquire_input_focus")
-	tilemap.set_visible("#map", "layer1", false)
+	tilemap.set_visible("#map", "bounds", false)
+	tilemap.set_visible("#map", LEAVES, LEAVES_VISIBLE)
+	tilemap.set_visible("#map", ROOMS, ROOMS_VISIBLE)
+	clear_leaves()
+	clear_rooms()
 	centre_map()
+	msg.post(".", "acquire_input_focus")
 end
 
-function centre_map(self)
+function clear_leaves()
+	for y=0,(MAP_SIZE+1),1 do
+		for x=0,(MAP_SIZE+1),1 do
+			tilemap.set_tile("#map", LEAVES, x, y, 0)
+		end
+	end
+end
+
+function clear_rooms()
+	for y=0,(MAP_SIZE+1),1 do
+		for x=0,(MAP_SIZE+1),1 do
+			tilemap.set_tile("#map", ROOMS, x, y, 0)
+		end
+	end
+end
+
+function centre_map()
 	local width = MAP_SIZE * 16
 	local height = MAP_SIZE * 16
 	go.set_position(-vmath.vector3(width/2, height/2, 0), ".")
 end
 
 function on_input(self, action_id, action)
-	if action_id == hash("draw") and action.pressed then
-		generate_dungeon()
-	end
-end
-
-function generate_dungeon(self)
-	print("Generating dungeon...")
-	generate_leaves()
-	draw_leaves()
-	print("Dungeon generation complete!")
-end
-
-Leaf = require("main.leaf")
-LEAVES = {}
-
-function copy(original)
-	local copy = {}
-	for key, value in pairs(original) do
-		copy[key] = value
-	end
-	return copy
-end
-
-function generate_leaves(self)
-	math.randomseed(os.time())
-	LEAVES = {}
-	
-	local root = Leaf.new(0, 0, MAP_SIZE, MAP_SIZE)
-	LEAVES[1] = root
-	count = 1
-
-	print("Generating leaves...")
-	did_split = true
-	while did_split do
-		did_split = false
+	if action_id == hash("gen_dungeon") and action.pressed then
+		generate_leaves()
+		generate_rooms()
+		draw_leaves()
+		draw_rooms()
+	elseif action_id == hash("gen_rooms") and action.pressed then
+		generate_rooms()
+		draw_rooms()
+	elseif action_id == hash("toggle_leaves") and action.pressed then
+		LEAVES_VISIBLE = not LEAVES_VISIBLE
+		tilemap.set_visible("#map", LEAVES, LEAVES_VISIBLE)
 		
-		local newLeaves = copy(LEAVES)
-		for l, leaf in pairs(LEAVES) do
-			if leaf:split(MIN_ROOM_SIZE) then
-				newLeaves[#newLeaves + 1] = leaf.leftChild
-				newLeaves[#newLeaves + 1] = leaf.rightChild
-				count = count + 1
-				did_split = true
-			end
-		end
-		LEAVES = newLeaves
+	elseif action_id == hash("toggle_rooms") and action.pressed then
+		ROOMS_VISIBLE = not ROOMS_VISIBLE
+		tilemap.set_visible("#map", ROOMS, ROOMS_VISIBLE)
 	end
+end
+
+function generate_leaves()
+	math.randomseed(os.time())
+	ROOT = LEAF.new(0, 0, MAP_SIZE, MAP_SIZE)
+	print("Generating leaves...")
+	local count = split_leaf(ROOT)
 	print("Generated " .. count .. " leaves.")
 end
 
-function draw_leaves(self)
-	fill_map(0)
-	tilemap.set_visible("#map", "layer1", true)
-
-	print("Drawing leaves...")
-	count = 0
-	for i, leaf in pairs(LEAVES) do
-		local tile = 3
-		
-		for y=leaf.y,(leaf.y + leaf.height),1 do
-			tilemap.set_tile("#map", "layer1", leaf.x, y, tile)
-			tilemap.set_tile("#map", "layer1", (leaf.x + leaf.width), y, tile)
+function split_leaf(leaf)
+	if leaf ~= nil then
+		if leaf:split(MIN_LEAF_SIZE) then
+			return 1 + split_leaf(leaf.leftChild) + split_leaf(leaf.rightChild)
 		end
-		
-		for x=leaf.x,(leaf.x + leaf.width),1 do
-			tilemap.set_tile("#map", "layer1", x, leaf.y, tile)
-			tilemap.set_tile("#map", "layer1", x, (leaf.y + leaf.height), tile)
-		end
-		
-		count = count + 1
+		return 1
 	end
-	print("Finished drawing leaves with " .. count .. " rectangles.")
+	return 0
 end
 
-function fill_map(tile)
-	for y=0,MAP_SIZE,1 do
-		for x=0,MAP_SIZE,1 do
-			tilemap.set_tile("#map", "layer1", x, y, tile)
+function generate_rooms()
+	math.randomseed(os.time())
+	print("Generating rooms...")
+	local count = generate_room(ROOT)
+	print("Generated " .. count .. " rooms.")
+end
+
+function generate_room(leaf)
+	if leaf ~= nil then
+		if leaf:create_room(MIN_ROOM_SIZE, ROOM_SPACING) then
+			return 1
 		end
+		return generate_room(leaf.leftChild) + generate_room(leaf.rightChild)
 	end
+	return 0
+end
+
+function draw_leaves()
+	clear_leaves()
+	print("Drawing leaves...")
+	local count = draw_leaf(ROOT)
+	print("Drew " .. count .. " leaves.")
+end
+
+function draw_leaf(leaf)
+	if leaf ~= nil then
+		local tile = 3
+
+		for y=leaf.y,(leaf.y + leaf.height + 1),1 do
+			tilemap.set_tile("#map", LEAVES, leaf.x, y, tile)
+			tilemap.set_tile("#map", LEAVES, (leaf.x + leaf.width + 1), y, tile)
+		end
+
+		for x=leaf.x,(leaf.x + leaf.width + 1),1 do
+			tilemap.set_tile("#map", LEAVES, x, leaf.y, tile)
+			tilemap.set_tile("#map", LEAVES, x, (leaf.y + leaf.height + 1), tile)
+		end
+
+		return 1 + draw_leaf(leaf.leftChild) + draw_leaf(leaf.rightChild)
+	end
+	return 0
+end
+
+function draw_rooms()
+	clear_rooms()
+	print("Drawing rooms...")
+	local count = draw_room(ROOT)
+	print("Drew " .. count .. " rooms.")
+end
+
+function draw_room(leaf)
+	if leaf ~= nil then
+		if leaf.room ~= nil then
+			for y=0,(leaf.room.height-1),1 do
+				for x=0,(leaf.room.width-1),1 do
+					tilemap.set_tile("#map", ROOMS, leaf.room.x + x, leaf.room.y + y, 2)
+				end
+			end
+			return 1
+		end
+		return draw_room(leaf.leftChild) + draw_room(leaf.rightChild)
+	end
+	return 0
 end
