@@ -1,12 +1,15 @@
-MAP_SIZE = 100 -- (space between outermost walls) Min 1, Max = 100
+MAP_SIZE = 75 -- (space between outermost walls) Min 1, Max = 100
 MIN_LEAF_SIZE = 10 -- Min = 1, Max = MAP_SIZE / 2 - 1
 MIN_ROOM_SIZE = 5 -- Min = 1, Max = MIN_LEAF_SIZE
 ROOM_SPACING = 1
+CORRIDOR_SIZE = 5
 
 LEAVES = "leaves" -- tilemap layers
 ROOMS = "rooms"
+CORRIDORS = "corridors"
 LEAVES_VISIBLE = true
 ROOMS_VISIBLE = true
+CORRIDORS_VISIBLE = true
 
 LEAF = require("main.leaf")
 ROOT = nil
@@ -15,9 +18,12 @@ function init(self)
 	tilemap.set_visible("#map", "bounds", false)
 	tilemap.set_visible("#map", LEAVES, LEAVES_VISIBLE)
 	tilemap.set_visible("#map", ROOMS, ROOMS_VISIBLE)
+	tilemap.set_visible("#map", CORRIDORS, CORRIDORS_VISIBLE)
 	clear_leaves()
 	clear_rooms()
+	clear_corridors()
 	centre_map()
+	generate_dungeon()
 	msg.post(".", "acquire_input_focus")
 end
 
@@ -37,6 +43,14 @@ function clear_rooms()
 	end
 end
 
+function clear_corridors()
+	for y=0,(MAP_SIZE+1),1 do
+		for x=0,(MAP_SIZE+1),1 do
+			tilemap.set_tile("#map", CORRIDORS, x, y, 0)
+		end
+	end
+end
+
 function centre_map()
 	local width = MAP_SIZE * 16
 	local height = MAP_SIZE * 16
@@ -45,26 +59,40 @@ end
 
 function on_input(self, action_id, action)
 	if action_id == hash("gen_dungeon") and action.pressed then
-		generate_leaves()
-		generate_rooms()
-		draw_leaves()
-		draw_rooms()
+		generate_dungeon()
 	elseif action_id == hash("gen_rooms") and action.pressed then
 		generate_rooms()
+		generate_corridors()
 		draw_rooms()
+		draw_corridors()
+	elseif action_id == hash("gen_corridors") and action.pressed then
+		generate_corridors()
+		draw_corridors()
 	elseif action_id == hash("toggle_leaves") and action.pressed then
 		LEAVES_VISIBLE = not LEAVES_VISIBLE
 		tilemap.set_visible("#map", LEAVES, LEAVES_VISIBLE)
-		
 	elseif action_id == hash("toggle_rooms") and action.pressed then
 		ROOMS_VISIBLE = not ROOMS_VISIBLE
 		tilemap.set_visible("#map", ROOMS, ROOMS_VISIBLE)
+	elseif action_id == hash("toggle_corridors") and action.pressed then
+		CORRIDORS_VISIBLE = not CORRIDORS_VISIBLE
+		tilemap.set_visible("#map", CORRIDORS, CORRIDORS_VISIBLE)
 	end
+end
+
+function generate_dungeon()
+	generate_leaves()
+	generate_rooms()
+	generate_corridors()
+	draw_leaves()
+	draw_rooms()
+	draw_corridors()
 end
 
 function generate_leaves()
 	math.randomseed(os.time())
 	ROOT = LEAF.new(0, 0, MAP_SIZE, MAP_SIZE)
+	ROOT.num = 1
 	print("Generating leaves...")
 	local count = split_leaf(ROOT)
 	print("Generated " .. count .. " leaves.")
@@ -89,7 +117,7 @@ end
 
 function generate_room(leaf)
 	if leaf ~= nil then
-		if leaf:create_room(MIN_ROOM_SIZE, ROOM_SPACING) then
+		if leaf:create_room(MIN_ROOM_SIZE, ROOM_SPACING, CORRIDOR_SIZE) then
 			return 1
 		end
 		return generate_room(leaf.leftChild) + generate_room(leaf.rightChild)
@@ -106,16 +134,23 @@ end
 
 function draw_leaf(leaf)
 	if leaf ~= nil then
+		if leaf.leftChild ~= nil then
+			print(leaf.leftChild.room)
+		end
+		if leaf.rightChild ~= nil then
+			print(leaf.rightChild.room)
+		end
+		print()
 		local tile = 3
 
-		for y=leaf.y,(leaf.y + leaf.height + 1),1 do
-			tilemap.set_tile("#map", LEAVES, leaf.x, y, tile)
-			tilemap.set_tile("#map", LEAVES, (leaf.x + leaf.width + 1), y, tile)
+		for y=leaf.y1,leaf.y2,1 do
+			tilemap.set_tile("#map", LEAVES, leaf.x1, y, tile)
+			tilemap.set_tile("#map", LEAVES, leaf.x2, y, tile)
 		end
 
-		for x=leaf.x,(leaf.x + leaf.width + 1),1 do
-			tilemap.set_tile("#map", LEAVES, x, leaf.y, tile)
-			tilemap.set_tile("#map", LEAVES, x, (leaf.y + leaf.height + 1), tile)
+		for x=leaf.x1,leaf.x2,1 do
+			tilemap.set_tile("#map", LEAVES, x, leaf.y1, tile)
+			tilemap.set_tile("#map", LEAVES, x, leaf.y2, tile)
 		end
 
 		return 1 + draw_leaf(leaf.leftChild) + draw_leaf(leaf.rightChild)
@@ -133,14 +168,57 @@ end
 function draw_room(leaf)
 	if leaf ~= nil then
 		if leaf.room ~= nil then
-			for y=0,(leaf.room.height-1),1 do
-				for x=0,(leaf.room.width-1),1 do
-					tilemap.set_tile("#map", ROOMS, leaf.room.x + x, leaf.room.y + y, 2)
+			for y=leaf.room.y1,leaf.room.y2,1 do
+				for x=leaf.room.x1,leaf.room.x2,1 do
+					tilemap.set_tile("#map", ROOMS, x, y, leaf.room.tile)
 				end
 			end
 			return 1
 		end
 		return draw_room(leaf.leftChild) + draw_room(leaf.rightChild)
+	end
+	return 0
+end
+
+function generate_corridors()
+	math.randomseed(os.time())
+	print("Generating corridors...")
+	local count = generate_corridor(ROOT)
+	print("Generated " .. count .. " corridors.")
+end
+
+function generate_corridor(leaf)
+	if leaf ~= nil then
+		local count = generate_corridor(leaf.leftChild) + generate_corridor(leaf.rightChild)
+		if leaf:connect_children(CORRIDOR_SIZE) then
+			return count + 1
+		end
+		return count
+	end
+	return 0
+end
+
+function draw_corridors()
+	clear_corridors()
+	print("Drawing corridors...")
+	local count = draw_corridor(ROOT)
+	print("Drew " .. count .. " corridors.")
+end
+
+function draw_corridor(leaf)
+	if leaf ~= nil then
+		local count = draw_corridor(leaf.leftChild) + draw_corridor(leaf.rightChild)
+		if leaf.corridor ~= nil then
+			leaf.corridor:draw_corridor(tilemap, CORRIDORS)
+			count = count + 1
+		end
+		if leaf.room ~= nil then
+			if leaf.room.corridor ~= nil then
+				leaf.room.corridor:draw_corridor(tilemap, CORRIDORS)
+				count = count + 1
+			end
+		end
+		return count
 	end
 	return 0
 end

@@ -6,6 +6,6 @@ end
 
 function init(self)
 	msg.post("#camera", "acquire_camera_focus")
-	msg.post("@render:", "use_fixed_projection", { zoom = 0.3 })
+	msg.post("@render:", "use_fixed_projection", { zoom = 0.5 })
 	centre_camera()
 end
